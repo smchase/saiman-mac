@@ -64,6 +64,7 @@ final class ChatViewModel: ObservableObject {
         inputText = ""
         pendingAttachments = []
         isLoading = false
+        Config.shared.fetchUserLocation()
     }
 
     func loadConversation(_ conversation: Conversation) {
