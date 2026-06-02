@@ -103,31 +103,46 @@ final class RedditReadTool: Tool {
             output += "TOP COMMENTS\n"
             output += String(repeating: "-", count: 60) + "\n\n"
 
-            for comment in thread.comments {
-                output += formatComment(comment)
-            }
+            output += formatComments(thread.comments)
         }
 
         return output
     }
 
-    /// Format a comment with its replies
-    private func formatComment(_ comment: RedditComment, indent: String = "") -> String {
+    /// Format comments with limits: 20 top-level, 5 depth-1, 2 depth-2
+    private func formatComments(_ comments: [RedditComment]) -> String {
         var output = ""
+        var topCount = 0
+        var depth1Count = 0
+        var depth2Count = 0
 
-        // Comment header with score and author
-        output += "\(indent)[\(comment.score) pts] u/\(comment.author)\n"
+        for comment in comments {
+            let depth = comment.depth
 
-        // Comment body - indent each line
-        let bodyLines = comment.body.components(separatedBy: "\n")
-        for line in bodyLines {
-            output += "\(indent)\(line)\n"
-        }
-        output += "\n"
+            if depth == 0 {
+                if topCount >= 20 { continue }
+                topCount += 1
+                depth1Count = 0
+                depth2Count = 0
+            } else if depth == 1 {
+                if depth1Count >= 5 { continue }
+                depth1Count += 1
+                depth2Count = 0
+            } else if depth == 2 {
+                if depth2Count >= 2 { continue }
+                depth2Count += 1
+            } else {
+                continue
+            }
 
-        // Replies with increased indent
-        for reply in comment.replies {
-            output += formatComment(reply, indent: indent + "    ")
+            let indent = String(repeating: "    ", count: depth)
+            output += "\(indent)[\(comment.score) pts] u/\(comment.author)\n"
+            for line in comment.body.components(separatedBy: "\n") {
+                if !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    output += "\(indent)\(line)\n"
+                }
+            }
+            output += "\n"
         }
 
         return output
