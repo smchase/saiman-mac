@@ -12,9 +12,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // Load environment variables from .env file
         DotEnv.load()
 
-        // Fetch user location for system prompt
-        Config.shared.fetchUserLocation()
-
         // Verify configuration
         if !Config.shared.isConfigured {
             showConfigurationAlert()

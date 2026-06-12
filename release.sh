@@ -10,7 +10,7 @@ osascript -e 'quit app "Saiman"' 2>/dev/null || pkill -f "Saiman" 2>/dev/null ||
 sleep 1
 
 echo "Building release version..."
-xcodebuild -scheme Saiman -configuration Release build 2>&1 | grep -E "(error:|warning:|BUILD)" | grep -v "warning: duplicate output"
+xcodebuild -scheme Saiman -configuration Release -destination 'platform=macOS,arch=arm64' build
 
 echo "Installing to /Applications..."
 rm -rf /Applications/Saiman.app

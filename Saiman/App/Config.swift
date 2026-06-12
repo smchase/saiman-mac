@@ -173,16 +173,14 @@ final class Config {
     // Cached location from IP lookup
     private(set) var userLocation: String = "Unknown"
 
-    func fetchUserLocation() {
+    func fetchUserLocation() async {
         guard let url = URL(string: "http://ip-api.com/json") else { return }
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let city = json["city"] as? String,
-                  let region = json["regionName"] as? String,
-                  let country = json["country"] as? String else { return }
-            self?.userLocation = "\(city), \(region), \(country)"
-        }.resume()
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let city = json["city"] as? String,
+              let region = json["regionName"] as? String,
+              let country = json["country"] as? String else { return }
+        self.userLocation = "\(city), \(region), \(country)"
     }
 
     /// Static system prompt for caching — no dynamic content.
