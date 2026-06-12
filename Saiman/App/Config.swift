@@ -127,6 +127,12 @@ final class Config {
         ProcessInfo.processInfo.environment["EXA_API_KEY"] ?? ""
     }
 
+    // MARK: - Brave Search Configuration
+
+    var braveApiKey: String {
+        ProcessInfo.processInfo.environment["BRAVE_API_KEY"] ?? ""
+    }
+
     // MARK: - App Configuration
 
     var staleTimeoutMinutes: Int {

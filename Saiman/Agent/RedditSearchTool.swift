@@ -1,16 +1,16 @@
 import Foundation
 
-/// Reddit search tool using Reddit's RSS feed.
-/// Finds relevant Reddit threads via Reddit's search endpoint.
+/// Reddit search tool powered by Brave Search API.
+/// Finds relevant Reddit threads using site:reddit.com filtering.
 final class RedditSearchTool: Tool {
     let name = "reddit_search"
 
     let description = """
-        Search Reddit for threads and discussions. Returns titles, URLs, dates, \
-        and body snippets. Use reddit_read to fetch full thread content and comments. \
-        This is keyword-based search (not semantic) — use specific terms that would \
-        appear in post titles/bodies. Scoping to subreddit(s) is recommended for \
-        better relevance.
+        Search Reddit for threads and discussions via Brave Search. \
+        Returns titles, URLs, dates, and snippets. \
+        Use reddit_read to fetch full thread content and comments. \
+        Subreddit scoping works by adding subreddit names to the query \
+        (soft filter, not exact). Recommended for better relevance.
         """
 
     let parameters: [ToolParameter] = [
@@ -22,24 +22,18 @@ final class RedditSearchTool: Tool {
         ToolParameter(
             name: "subreddits",
             type: .array,
-            description: "Optional subreddit(s) to scope the search (e.g. ['askTO', 'toronto']). Omit for global search.",
+            description: "Optional subreddit(s) to scope the search (e.g. ['askTO', 'toronto']). Added to query as keywords.",
             required: false
         ),
         ToolParameter(
-            name: "sort",
+            name: "freshness",
             type: .string,
-            description: "Sort order: relevance, new, top, comments. Default: relevance.",
-            required: false
-        ),
-        ToolParameter(
-            name: "time_filter",
-            type: .string,
-            description: "Time window: all, year, month, week, day. Default: all.",
+            description: "Filter by recency: pd (24h), pw (week), pm (month), py (year). Default: no limit.",
             required: false
         )
     ]
 
-    private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+    private let config = Config.shared
 
     func execute(arguments: String) async throws -> String {
         guard let data = arguments.data(using: .utf8),
@@ -52,40 +46,34 @@ final class RedditSearchTool: Tool {
         }
 
         let subreddits = args["subreddits"] as? [String]
-        let sort = args["sort"] as? String
-        let timeFilter = args["time_filter"] as? String
+        let freshness = args["freshness"] as? String
+
+        // Build search query
+        var searchQuery = query
+        if let subs = subreddits, !subs.isEmpty {
+            searchQuery += " " + subs.joined(separator: " ")
+        }
+        searchQuery += " site:reddit.com"
 
         // Build URL
-        var components: URLComponents
-        if let subs = subreddits, !subs.isEmpty {
-            let subPath = subs.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }.joined(separator: "+")
-            components = URLComponents(string: "https://www.reddit.com/r/\(subPath)/search.rss")!
-            components.queryItems = [
-                URLQueryItem(name: "q", value: query),
-                URLQueryItem(name: "restrict_sr", value: "on"),
-                URLQueryItem(name: "type", value: "link")
-            ]
-        } else {
-            components = URLComponents(string: "https://www.reddit.com/search.rss")!
-            components.queryItems = [
-                URLQueryItem(name: "q", value: query),
-                URLQueryItem(name: "type", value: "link")
-            ]
+        var components = URLComponents(string: "https://api.search.brave.com/res/v1/web/search")!
+        var queryItems = [
+            URLQueryItem(name: "q", value: searchQuery),
+            URLQueryItem(name: "count", value: "20")
+        ]
+        if let freshness = freshness {
+            queryItems.append(URLQueryItem(name: "freshness", value: freshness))
         }
-
-        if let sort = sort {
-            components.queryItems?.append(URLQueryItem(name: "sort", value: sort))
-        }
-        if let timeFilter = timeFilter {
-            components.queryItems?.append(URLQueryItem(name: "t", value: timeFilter))
-        }
+        components.queryItems = queryItems
 
         guard let url = components.url else {
-            throw ToolError.invalidArguments("Failed to build search URL")
+            throw ToolError.executionFailed("Failed to build search URL")
         }
 
         var request = URLRequest(url: url)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
+        request.setValue(config.braveApiKey, forHTTPHeaderField: "X-Subscription-Token")
         request.timeoutInterval = 30
 
         let responseData: Data
@@ -99,158 +87,76 @@ final class RedditSearchTool: Tool {
 
         if let httpResponse = response as? HTTPURLResponse {
             if httpResponse.statusCode == 429 {
-                return "Reddit rate limit hit. Try again in a moment."
+                throw ToolError.executionFailed("Brave rate limit hit")
             }
             guard httpResponse.statusCode == 200 else {
                 Logger.shared.error("RedditSearch: HTTP \(httpResponse.statusCode)")
-                throw ToolError.executionFailed("Reddit returned HTTP \(httpResponse.statusCode)")
+                throw ToolError.executionFailed("Brave returned HTTP \(httpResponse.statusCode)")
             }
         }
 
-        guard let xmlString = String(data: responseData, encoding: .utf8) else {
-            throw ToolError.executionFailed("Failed to decode Reddit response")
+        guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let web = json["web"] as? [String: Any],
+              let results = web["results"] as? [[String: Any]] else {
+            return ""
         }
 
-        // Parse Atom XML
-        let parser = RedditRSSParser(xml: xmlString)
-        let entries = parser.parse()
-
-        if entries.isEmpty {
-            return "No Reddit threads found for: \(query)"
+        if results.isEmpty {
+            return ""
         }
 
         let scope = subreddits.map { "r/" + $0.joined(separator: "+") } ?? "all of Reddit"
         var output = "Reddit search (\(scope)): \(query)\n"
         output += String(repeating: "=", count: 60) + "\n\n"
 
-        for (index, entry) in entries.enumerated() {
-            output += "[\(index + 1)] \(entry.title)\n"
-            output += "    \(entry.subreddit) | \(entry.author) | \(entry.date)\n"
-            output += "    \(entry.link)\n"
-            if !entry.snippet.isEmpty {
-                output += "    \(entry.snippet)\n"
+        for (index, result) in results.enumerated() {
+            let title = result["title"] as? String ?? "Untitled"
+            let resultUrl = result["url"] as? String ?? ""
+            let description = result["description"] as? String ?? ""
+            let age = result["age"] as? String ?? ""
+
+            // Extract subreddit from URL
+            let subreddit = extractSubreddit(from: resultUrl) ?? "reddit"
+
+            // Clean snippet
+            var snippet = description
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
+            // Decode HTML entities
+            if let entityData = snippet.data(using: .utf8),
+               let decoded = try? NSAttributedString(
+                   data: entityData,
+                   options: [.documentType: NSAttributedString.DocumentType.html,
+                            .characterEncoding: String.Encoding.utf8.rawValue],
+                   documentAttributes: nil) {
+                snippet = decoded.string
+            }
+            if snippet.count > 200 {
+                snippet = String(snippet.prefix(200)) + "..."
+            }
+
+            output += "[\(index + 1)] \(title)\n"
+            output += "    \(subreddit)"
+            if !age.isEmpty {
+                output += " | \(age)"
+            }
+            output += "\n    \(resultUrl)\n"
+            if !snippet.isEmpty {
+                output += "    \(snippet)\n"
             }
             output += "\n"
         }
 
         return output
     }
-}
 
-// MARK: - RSS Parser
-
-private struct RSSEntry {
-    let title: String
-    let link: String
-    let date: String
-    let author: String
-    let subreddit: String
-    let snippet: String
-}
-
-private class RedditRSSParser: NSObject, XMLParserDelegate {
-    private let xml: String
-    private var entries: [RSSEntry] = []
-
-    private var inEntry = false
-    private var currentElement = ""
-    private var currentTitle = ""
-    private var currentLink = ""
-    private var currentUpdated = ""
-    private var currentAuthorName = ""
-    private var currentCategory = ""
-    private var currentContent = ""
-    private var inAuthor = false
-
-    init(xml: String) {
-        self.xml = xml
-    }
-
-    func parse() -> [RSSEntry] {
-        guard let data = xml.data(using: .utf8) else { return [] }
-        let parser = XMLParser(data: data)
-        parser.delegate = self
-        parser.parse()
-        return entries
-    }
-
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
-        currentElement = elementName
-
-        if elementName == "entry" {
-            inEntry = true
-            currentTitle = ""
-            currentLink = ""
-            currentUpdated = ""
-            currentAuthorName = ""
-            currentCategory = ""
-            currentContent = ""
-        } else if elementName == "link" && inEntry {
-            currentLink = attributes["href"] ?? ""
-        } else if elementName == "category" && inEntry {
-            currentCategory = attributes["label"] ?? ""
-        } else if elementName == "author" {
-            inAuthor = true
+    private func extractSubreddit(from url: String) -> String? {
+        let pattern = #"/r/([^/]+)/"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: url, range: NSRange(url.startIndex..., in: url)),
+              let range = Range(match.range(at: 1), in: url) else {
+            return nil
         }
-    }
-
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
-        guard inEntry else { return }
-
-        if currentElement == "title" {
-            currentTitle += string
-        } else if currentElement == "updated" {
-            currentUpdated += string
-        } else if currentElement == "name" && inAuthor {
-            currentAuthorName += string
-        } else if currentElement == "content" {
-            currentContent += string
-        }
-    }
-
-    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
-        if elementName == "author" {
-            inAuthor = false
-        } else if elementName == "entry" {
-            inEntry = false
-
-            let snippet = extractSnippet(from: currentContent)
-            let date = String(currentUpdated.prefix(10))
-
-            entries.append(RSSEntry(
-                title: currentTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-                link: currentLink,
-                date: date,
-                author: currentAuthorName.trimmingCharacters(in: .whitespacesAndNewlines),
-                subreddit: currentCategory,
-                snippet: snippet
-            ))
-        }
-
-        currentElement = ""
-    }
-
-    private func extractSnippet(from htmlContent: String) -> String {
-        var text = htmlContent
-        // Strip HTML tags
-        text = text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-        // Decode common entities
-        text = text.replacingOccurrences(of: "&amp;", with: "&")
-        text = text.replacingOccurrences(of: "&lt;", with: "<")
-        text = text.replacingOccurrences(of: "&gt;", with: ">")
-        text = text.replacingOccurrences(of: "&quot;", with: "\"")
-        text = text.replacingOccurrences(of: "&#39;", with: "'")
-        text = text.replacingOccurrences(of: "&#x27;", with: "'")
-        // Collapse whitespace
-        text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
-        // Remove "submitted by" boilerplate
-        if let range = text.range(of: "submitted by /u/", options: .caseInsensitive) {
-            text = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
-        }
-        if text.isEmpty { return "" }
-        if text.count > 200 {
-            return String(text.prefix(200)) + "..."
-        }
-        return text
+        return "r/" + String(url[range])
     }
 }
