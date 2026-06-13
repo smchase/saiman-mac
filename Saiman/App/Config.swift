@@ -170,19 +170,6 @@ final class Config {
         fatalError("system_prompt.txt not found! Ensure it's added to the Xcode project and Copy Bundle Resources phase.")
     }()
 
-    // Cached location from IP lookup
-    private(set) var userLocation: String = "Unknown"
-
-    func fetchUserLocation() async {
-        guard let url = URL(string: "http://ip-api.com/json") else { return }
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let city = json["city"] as? String,
-              let region = json["regionName"] as? String,
-              let country = json["country"] as? String else { return }
-        self.userLocation = "\(city), \(region), \(country)"
-    }
-
     /// Static system prompt for caching — no dynamic content.
     /// Dynamic context (date/time/location) is prepended to the user's message instead,
     /// so the system prompt prefix stays identical across requests for cache hits.
@@ -195,7 +182,8 @@ final class Config {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
         let dateTime = formatter.string(from: Date())
-        return "[Current date: \(dateTime) | Location: \(userLocation)]"
+        let location = LocationManager.shared.currentLocation
+        return "[Current date: \(dateTime) | Location: \(location)]"
     }
 
     // MARK: - Validation

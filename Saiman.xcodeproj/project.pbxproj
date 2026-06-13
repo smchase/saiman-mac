@@ -54,9 +54,11 @@
 		A1000031 /* RedditSearchTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000031; };
 		A1000032 /* RedditReadTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000032; };
 		A1000033 /* RedditClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000033; };
+		A1000034 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000034; };
 		B1000031 /* RedditSearchTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000031; };
 		B1000032 /* RedditReadTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000032; };
 		B1000033 /* RedditClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000033; };
+		B1000034 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000034; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -96,6 +98,7 @@
 		A2000031 /* RedditSearchTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedditSearchTool.swift; sourceTree = "<group>"; };
 		A2000032 /* RedditReadTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedditReadTool.swift; sourceTree = "<group>"; };
 		A2000033 /* RedditClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedditClient.swift; sourceTree = "<group>"; };
+		A2000034 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -189,6 +192,7 @@
 				A2000025 /* AttachmentManager.swift */,
 				A2000028 /* TokenTracker.swift */,
 				A2000033 /* RedditClient.swift */,
+				A2000034 /* LocationManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -355,6 +359,7 @@
 				A1000031 /* RedditSearchTool.swift in Sources */,
 				A1000032 /* RedditReadTool.swift in Sources */,
 				A1000033 /* RedditClient.swift in Sources */,
+				A1000034 /* LocationManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -381,6 +386,7 @@
 				B1000031 /* RedditSearchTool.swift in Sources */,
 				B1000032 /* RedditReadTool.swift in Sources */,
 				B1000033 /* RedditClient.swift in Sources */,
+				B1000034 /* LocationManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -139,13 +139,6 @@ final class ChatViewModel: ObservableObject {
             }
         }
 
-        Task {
-            await Config.shared.fetchUserLocation()
-            self.sendMessageContinuation(conversation: conversation, text: text, savedAttachments: savedAttachments, messageAttachments: messageAttachments)
-        }
-    }
-
-    private func sendMessageContinuation(conversation: Conversation, text: String, savedAttachments: [Attachment], messageAttachments: [PendingAttachment]) {
         // Create user message with dynamic context (date/time/location) baked in for prompt caching
         let userMessage = Message.userMessage(
             conversationId: conversation.id,

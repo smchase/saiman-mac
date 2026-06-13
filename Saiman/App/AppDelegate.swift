@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // Load environment variables from .env file
         DotEnv.load()
 
+        // Start location services
+        _ = LocationManager.shared
+
         // Verify configuration
         if !Config.shared.isConfigured {
             showConfigurationAlert()
